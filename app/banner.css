@@ -1,0 +1,332 @@
+/* Sticky shell — keeps banner + nav pinned to the top of the viewport as
+   the user scrolls. When the banner is dismissed it unmounts from the DOM,
+   the shell shrinks, and the nav stays alone at the top. */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  /* Hairline shadow under the whole stack so it stays separated from page content while scrolled */
+  filter: drop-shadow(0 1px 0 rgba(27, 58, 82, 0.06));
+}
+
+/* Work-in-progress banner — drops from the top of the page with a small
+   bounce. Deep iceberg-blue gradient, scrolling marquee strip, decorative
+   snowflakes, and a chunky cartoon-outlined Ice Bear avatar. Replays on
+   every route change via usePathname() in the React component. */
+
+.wip-banner {
+  position: relative;
+  z-index: 70;
+  background: linear-gradient(180deg, #0c2236 0%, #1b3a52 55%, #214a6a 100%);
+  color: var(--snow);
+  border-bottom: var(--outline-thick);
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.18);
+  font-family: var(--font-body);
+  overflow: hidden;
+  transform: translateY(-110%);
+  transition: transform 0.4s cubic-bezier(0.45, 1.55, 0.5, 1);
+  will-change: transform;
+}
+.wip-banner[data-state="entering"] {
+  transform: translateY(-110%);
+}
+.wip-banner[data-state="open"] {
+  transform: translateY(0);
+}
+.wip-banner[data-state="leaving"] {
+  transform: translateY(-110%);
+}
+
+/* CRT-style faint scanlines on the deep blue (echoes the TV section) */
+.wip-stripes {
+  position: absolute;
+  inset: 32px 0 0;
+  background-image: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.03) 0 1px,
+    transparent 1px 4px
+  );
+  pointer-events: none;
+}
+
+/* Top marquee strip */
+.wip-marquee {
+  position: relative;
+  height: 32px;
+  background: var(--sun);
+  border-bottom: 3px solid var(--ink);
+  overflow: hidden;
+  color: var(--ink);
+}
+.wip-marquee-track {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  white-space: nowrap;
+  width: max-content;
+  height: 100%;
+  padding-right: 22px;
+  animation: wip-scroll 28s linear infinite;
+}
+.wip-marquee-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 22px;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.wip-marquee-text {
+  white-space: nowrap;
+}
+.wip-marquee-sep {
+  color: var(--coral-2);
+  font-size: 13px;
+}
+@keyframes wip-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+/* Drifting snowflakes inside the banner — quiet, decorative */
+.wip-flakes {
+  position: absolute;
+  top: 32px;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.wip-flakes span {
+  position: absolute;
+  top: -12px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1.5px rgba(27, 58, 82, 0.4);
+  animation: wip-flake-fall 9s linear infinite;
+}
+@keyframes wip-flake-fall {
+  0%   { transform: translateY(0) rotate(0); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translateY(140px) rotate(360deg); opacity: 0; }
+}
+
+/* Main content row */
+.wip-inner {
+  position: relative;
+  z-index: 2;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 22px 28px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 26px;
+}
+
+/* Bear avatar block */
+.wip-avatar {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #b8e2ee, #79c0d8);
+  border: var(--outline-thick);
+  box-shadow: var(--shadow);
+  display: grid;
+  place-items: center;
+  flex: none;
+  animation: wip-bob 3.6s ease-in-out infinite;
+}
+@keyframes wip-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+.wip-bear {
+  display: grid;
+  place-items: center;
+}
+.wip-badge {
+  position: absolute;
+  top: -10px;
+  right: -12px;
+  background: var(--coral);
+  color: var(--snow);
+  border: 2.5px solid var(--ink);
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  box-shadow: var(--shadow-sm);
+  transform: rotate(8deg);
+}
+.wip-tool {
+  position: absolute;
+  bottom: -10px;
+  left: -14px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  background: var(--sun);
+  border: 2.5px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: var(--shadow-sm);
+  transform: rotate(-8deg);
+  animation: wip-tool-swing 2.6s ease-in-out infinite;
+  transform-origin: 70% 30%;
+}
+@keyframes wip-tool-swing {
+  0%, 100% { transform: rotate(-8deg); }
+  50%      { transform: rotate(-22deg); }
+}
+
+/* Copy block */
+.wip-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wip-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+}
+.wip-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--coral);
+  box-shadow: 0 0 0 4px rgba(255, 140, 92, 0.28);
+  animation: wip-pulse 1.4s ease-in-out infinite;
+}
+@keyframes wip-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.55; transform: scale(0.78); }
+}
+.wip-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(22px, 2.8vw, 32px);
+  line-height: 1.05;
+  letter-spacing: var(--display-tracking);
+  color: var(--snow);
+  margin: 0;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.25);
+}
+.wip-title em {
+  font-family: var(--font-chunky);
+  font-style: normal;
+  color: var(--sun);
+  display: inline-block;
+  transform: rotate(-2deg);
+  margin: 0 3px;
+}
+.wip-sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.75);
+  max-width: 60ch;
+}
+
+/* Right-side actions */
+.wip-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+.wip-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--coral);
+  color: var(--snow);
+  border: var(--outline);
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 14px;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.5);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.wip-cta:hover {
+  transform: translate(-1px, -2px);
+  box-shadow: 0 7px 0 rgba(0, 0, 0, 0.5);
+  background: var(--sun);
+  color: var(--ink);
+}
+
+.wip-x {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--snow);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 0.1s ease, background 0.1s ease, border-color 0.1s ease;
+}
+.wip-x:hover {
+  background: var(--coral);
+  border-color: var(--snow);
+  transform: rotate(90deg);
+}
+
+/* Responsive — collapse layout below desktop */
+@media (max-width: 900px) {
+  .wip-inner {
+    grid-template-columns: auto 1fr auto;
+    padding: 18px 22px;
+    gap: 18px;
+  }
+  .wip-avatar { width: 76px; height: 76px; border-radius: 20px; }
+  .wip-cta { padding: 10px 14px; font-size: 13px; }
+  .wip-sub { font-size: 13px; }
+}
+
+@media (max-width: 640px) {
+  .wip-inner {
+    grid-template-columns: auto 1fr;
+    grid-template-areas: "avatar copy" "actions actions";
+    padding: 16px 18px;
+    gap: 14px 16px;
+  }
+  .wip-avatar { grid-area: avatar; width: 64px; height: 64px; }
+  .wip-copy { grid-area: copy; }
+  .wip-actions { grid-area: actions; justify-content: space-between; width: 100%; }
+  .wip-sub { display: none; }
+  .wip-tool { width: 28px; height: 28px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wip-banner { transition: none; }
+  .wip-marquee-track,
+  .wip-flakes span,
+  .wip-avatar,
+  .wip-tool,
+  .wip-dot {
+    animation: none;
+  }
+}

@@ -1,0 +1,70 @@
+---
+title: "Docker on EC2: a minimalist's deploy stack"
+lede: "Three files. No yaml soup. Ice Bear keeps the fridge cold and the deploys cold too — here's the whole stack on one page."
+tag: "DevOps"
+date: "2026-01-09"
+cover: "deploy"
+reads: "5.4k reads"
+sections:
+  - { id: "premise", title: "The premise" }
+  - { id: "why",     title: "Why not Kubernetes" }
+  - { id: "files",   title: "The three files" }
+  - { id: "zero",    title: "Zero-downtime, the cheap way" }
+  - { id: "backup",  title: "Backups & secrets" }
+  - { id: "cost",    title: "What this stack costs" }
+  - { id: "lessons", title: "Six lessons, taped to the fridge" }
+---
+
+When the workload fits on one box, ship it on one box. This stack runs Otto's beta in production: one EC2 instance, one Docker Compose file, one nightly cron. No control plane to maintain.
+
+<h2 id="premise">The premise</h2>
+
+We weren't paid to run Kubernetes; we were paid to ship Otto. The boring path is a small EC2 instance, Docker Compose, and a Caddyfile. Three files cover the whole deploy.
+
+<h2 id="why">Why not Kubernetes</h2>
+
+Kubernetes is excellent infrastructure for problems we don't have. Multi-region failover, fleet-scale rollouts, dozens of microservices — none of that exists here. We have one app, one database, one queue. Pretending otherwise costs operator time we don't have.
+
+<h2 id="files">The three files</h2>
+
+```yaml
+# docker-compose.yml
+services:
+  app:    { image: otto/app:${VERSION}, restart: unless-stopped, env_file: .env }
+  worker: { image: otto/worker:${VERSION}, restart: unless-stopped, env_file: .env }
+  db:     { image: postgres:16, restart: unless-stopped, volumes: ["pg:/var/lib/postgresql/data"] }
+volumes: { pg: {} }
+```
+
+```caddy
+# Caddyfile — TLS + HTTP/2 from the kernel up, in three lines
+app.icebear.dev { reverse_proxy app:8080 }
+```
+
+```bash
+# deploy.sh
+docker compose pull && docker compose up -d
+```
+
+That's the entire deploy. Caddy handles TLS via Let's Encrypt automatically.
+
+<h2 id="zero">Zero-downtime, the cheap way</h2>
+
+Compose alone gives us second-counted downtime — usually under three. Acceptable for our SLA. When we need genuine zero-downtime, we run two instances behind Caddy load balancing and roll them one at a time.
+
+<h2 id="backup">Backups & secrets</h2>
+
+Postgres backups: `pg_dump` to S3 every six hours, retained 30 days, life-cycled to Glacier at 90. Secrets: AWS Parameter Store, pulled into env on deploy. Don't hand-edit `.env` files on the box.
+
+<h2 id="cost">What this stack costs</h2>
+
+t4g.medium, 30GB EBS, S3 backups: about $24/month. The biggest cost is discipline — not adding moving parts until they earn their keep.
+
+<h2 id="lessons">Six lessons, taped to the fridge</h2>
+
+- **Match infra to workload.** One box for one app is a feature.
+- **Caddy first, nginx maybe.** Auto-TLS is too useful to opt out of.
+- **Pin everything.** Image tags, package versions, OS versions.
+- **Back up daily, test monthly.** A backup you haven't restored is a guess.
+- **Secrets out of the box.** Parameter Store, not editor history.
+- **Three files is enough.** Until it isn't.

@@ -1,0 +1,61 @@
+---
+title: "FastAPI + WebSockets: a speech pipeline post-mortem"
+lede: "Whisper, asyncio, and the art of not dropping a syllable when the network blinks. What we shipped, what we'd undo, and what stays."
+tag: "Backend · Post-mortem"
+date: "2026-04-24"
+cover: "speech"
+reads: "9.6k reads"
+sections:
+  - { id: "premise",     title: "Streaming voice, the hard way" }
+  - { id: "stack",       title: "Why FastAPI for audio" }
+  - { id: "chunking",    title: "Chunking, but for waveforms" }
+  - { id: "backpressure", title: "Backpressure isn't a metaphor" }
+  - { id: "reconnect",   title: "The reconnect dance" }
+  - { id: "cost",        title: "What it cost to ship" }
+  - { id: "lessons",     title: "Six lessons, taped to the fridge" }
+---
+
+A streaming speech-to-text pipeline that doesn't drop syllables sounds like one job. It's actually three: capture, transport, transcribe. Each one breaks in a different way, and the user only sees the final tape.
+
+<h2 id="premise">Streaming voice, the hard way</h2>
+
+We needed live captions in a meeting app. Latency budget: under 500ms from speech to text on screen. We had Whisper, FastAPI, and a WebSocket between them. The first prototype worked in the lab and immediately fell over the second a real network got in the way.
+
+<h2 id="stack">Why FastAPI for audio</h2>
+
+FastAPI ships async-first WebSocket support that doesn't fight Python's asyncio runtime. Tornado and Sanic are also fine choices. We picked FastAPI because the rest of the codebase already lived there and "one less stack" is its own feature.
+
+```python
+@app.websocket("/audio")
+async def audio_socket(ws: WebSocket):
+    await ws.accept()
+    async for chunk in audio_stream(ws):
+        await transcribe_queue.put(chunk)
+```
+
+That's the entire transport layer. Backpressure, errors, and reconnects are not in this code block — that's where most of the bug fixes lived.
+
+<h2 id="chunking">Chunking, but for waveforms</h2>
+
+Whisper wants 30-second windows. The user wants real-time results. The compromise is overlapping windows — a 5-second decode pass over the most recent 30 seconds of audio, fired every 1.5 seconds. The overlap means we re-decode some audio every tick, which feels wasteful until you measure it. Whisper-small on a T4 happily eats that load.
+
+<h2 id="backpressure">Backpressure isn't a metaphor</h2>
+
+A WebSocket on a wonky network will silently buffer megabytes before it crashes the event loop. We added a hard cap: if the outbound queue exceeds 50 chunks, drop the oldest and emit a `backpressure` event. The UI shows a yellow dot. Users tolerate yellow; they hate stale captions.
+
+<h2 id="reconnect">The reconnect dance</h2>
+
+Real networks die. The trick is making the reconnect invisible. We assign every session a UUID, send a `session_resume` frame on reconnect, and replay the last 5 seconds of audio. The transcript stitches itself back together with no visible seam.
+
+<h2 id="cost">What it cost to ship</h2>
+
+Whisper-small on a single T4: $0.42 / hour of decoded audio. Storage is negligible. The expensive part was the developer time spent learning that asyncio queues are not magic.
+
+<h2 id="lessons">Six lessons, taped to the fridge</h2>
+
+- **Measure the network, not your laptop.** The lab lies.
+- **Backpressure is a UI feature.** Tell the user when you drop frames.
+- **Reconnect with state.** Stateless retries always lose the last syllable.
+- **Whisper-small ships.** Don't reach for the big model first.
+- **Overlap your windows.** Real-time is a series of small re-decodes.
+- **Pin your runtime.** Async + Whisper + cuDNN has more moving parts than you think.

@@ -1,0 +1,62 @@
+---
+title: "Async scrapers: 12× throughput, zero rate-limit bans"
+lede: "Concurrency without disrespect. A polite-but-fast scraping template Ice Bear keeps reaching for, plus the rate-limit etiquette that keeps you online."
+tag: "Python · Async"
+date: "2026-02-21"
+cover: "scrape"
+reads: "7.8k reads"
+sections:
+  - { id: "premise", title: "The premise" }
+  - { id: "stack",   title: "Why asyncio + HTTPX" }
+  - { id: "workers", title: "Queues and workers" }
+  - { id: "limits",  title: "Rate limits, politely" }
+  - { id: "retries", title: "Retries with grace" }
+  - { id: "cost",    title: "Cost of being kind" }
+  - { id: "lessons", title: "Six lessons, taped to the fridge" }
+---
+
+Scraping at scale isn't about how many requests you can fire. It's about how many you can fire *without becoming someone else's problem*. The template that ended up in production after three failed iterations is polite, async, and 12× faster than the naïve version.
+
+<h2 id="premise">The premise</h2>
+
+We needed to crawl roughly half a million pages per week across 80 domains. Half a million sounds like a lot; spread across 80 domains and 168 hours it's not. The hard parts are politeness, retries, and not leaking memory at 3 AM.
+
+<h2 id="stack">Why asyncio + HTTPX</h2>
+
+`httpx.AsyncClient` is the only client where connection pooling, timeouts, and HTTP/2 all work out of the box. Add `asyncio.Semaphore` for per-domain concurrency and you have a scraper that scales without ever blocking on a misbehaving host.
+
+```python
+sem = asyncio.Semaphore(8)
+
+async def fetch(url: str) -> bytes:
+    async with sem:
+        async with httpx.AsyncClient(http2=True, timeout=20) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            return r.content
+```
+
+<h2 id="workers">Queues and workers</h2>
+
+A bounded `asyncio.Queue` between the URL frontier and the workers prevents the system from over-committing memory. Workers pull, fetch, parse, and push results to a second queue. The architecture is two queues and one shared cancellation event — that's it.
+
+<h2 id="limits">Rate limits, politely</h2>
+
+We track per-domain RPS with a token bucket. The bucket refills at the lower of (a) the explicit `Crawl-Delay` from robots.txt and (b) our internal cap. If a domain returns 429, we halve our budget for that host for the next 10 minutes. Sites notice when you behave; in 18 months we've never been blocked.
+
+<h2 id="retries">Retries with grace</h2>
+
+Exponential backoff with jitter, capped at 5 attempts. Permanent failures (4xx that aren't 429) skip retries entirely. We log the full failure mode so the next run knows not to even try the dead URL.
+
+<h2 id="cost">Cost of being kind</h2>
+
+Politeness costs throughput, until you measure it. We're 12× faster than the synchronous version because the slow part was always I/O, not the rate cap. Each polite delay is filled by other domains' requests. The total wall time goes down even though each individual request waits longer.
+
+<h2 id="lessons">Six lessons, taped to the fridge</h2>
+
+- **Async is for I/O.** Don't reach for it to make CPU work faster.
+- **One semaphore per domain.** Global concurrency is the wrong knob.
+- **Retry with reason.** Not every error wants a second chance.
+- **Listen to 429.** Always.
+- **Two queues, one cancel.** Architecture beats configuration.
+- **Politeness is faster.** Counterintuitive, true.

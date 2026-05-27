@@ -1,0 +1,59 @@
+---
+title: "One contract, three clients: types across web, mobile, desktop"
+lede: "Otto talks to three clients. One source of truth, zero runtime drift — here's the contract that keeps the platforms honest."
+tag: "Architecture"
+date: "2026-03-12"
+cover: "types"
+reads: "6.2k reads"
+sections:
+  - { id: "premise",   title: "The premise" }
+  - { id: "source",    title: "Picking the source of truth" }
+  - { id: "shape",     title: "Shape, then schema" }
+  - { id: "clients",   title: "Generating clients" }
+  - { id: "migration", title: "Migrations across platforms" }
+  - { id: "cost",      title: "What it costs to keep" }
+  - { id: "lessons",   title: "Six lessons, taped to the fridge" }
+---
+
+Otto talks to three clients — web (React), mobile (React Native), and desktop (Tauri). Three platforms, one server, and a single typed contract that keeps everyone honest.
+
+<h2 id="premise">The premise</h2>
+
+Type drift between clients and server is the most boring bug class on Earth, which is exactly why it eats hours. We wanted a setup where adding a field on the server made TypeScript scream on every client until it was handled — no runtime surprises, no defensive `as any` parsing.
+
+<h2 id="source">Picking the source of truth</h2>
+
+The server is the source of truth. We use Pydantic on FastAPI and emit the schema as OpenAPI. Both clients consume the schema; nothing on a client gets to define a new shape.
+
+```python
+class TaskV1(BaseModel):
+    id: UUID
+    title: str
+    completed: bool
+    due: datetime | None
+```
+
+<h2 id="shape">Shape, then schema</h2>
+
+We codified one rule: model the shape of the data before you write the database schema. Pydantic first, SQLAlchemy second. This forces UX-relevant shapes (composite fields, computed flags) to be first-class, not a JOIN waiting to happen.
+
+<h2 id="clients">Generating clients</h2>
+
+`openapi-typescript` turns the OpenAPI doc into a `.d.ts` file. Both the web and desktop apps import directly from it. React Native goes through the same path with a tiny shim for native modules. No hand-written types, no copy-paste.
+
+<h2 id="migration">Migrations across platforms</h2>
+
+When the server adds a field, the contract bumps. Every client gets a PR titled "contract bump" that has only one change: the regenerated type file. The CI build then fails everywhere a downstream needs to handle the new field. It's the cheapest cross-team coordination we've ever shipped.
+
+<h2 id="cost">What it costs to keep</h2>
+
+About 30 minutes of CI a week, plus the discipline to never add a manual type. The wins: shipping the same feature to three clients in a single PR, no live-incident debugging of mismatched payloads, and onboarding new devs in hours instead of days.
+
+<h2 id="lessons">Six lessons, taped to the fridge</h2>
+
+- **One source of truth.** Pick the server. Defend it.
+- **Generate, never hand-write.** Hand-written types drift on contact with humans.
+- **Compose, don't inline.** Shared shapes belong in a shared file.
+- **Break the build, not production.** Type errors are cheaper than runtime errors.
+- **Ship the contract first.** Every feature starts with a typed shape.
+- **Audit the boundary.** Where types meet network, log liberally for a week.

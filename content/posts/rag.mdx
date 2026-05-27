@@ -1,0 +1,96 @@
+---
+title: "Ice Bear ships RAG: a chatbot, but make it useful"
+lede: "What broke, what scaled, and why Ice Bear stopped fighting the embedding store after week two. A field report from production."
+tag: "AI · Field Notes"
+date: "2026-05-18"
+cover: "rag"
+reads: "12.4k reads"
+sections:
+  - { id: "premise",    title: "The premise" }
+  - { id: "stack",      title: "The stack (boring on purpose)" }
+  - { id: "chunking",   title: "Chunking is the whole game" }
+  - { id: "reranker",   title: "The reranker pulls its weight" }
+  - { id: "citations",  title: "Citations or it didn't happen" }
+  - { id: "cost",       title: "Cost, latency, and other lies" }
+  - { id: "lessons",    title: "Six lessons, taped to the fridge" }
+---
+
+The premise was simple: take a pile of company documentation that nobody reads, attach a chatbot to it, and let people ask it questions in plain English. The premise is always simple. The first month is where the premise meets the building.
+
+This is a field report from production. Not a hype piece. Not a tutorial. Just what shipped, what didn't, and what Ice Bear would do differently if he started over on Monday.
+
+<h2 id="premise">The premise</h2>
+
+Customer support tickets were taking too long. Eighty percent of them were already answered in our docs — the answer was just buried four pages deep behind a search bar that everyone correctly distrusted. The plan: build a chatbot that knew the docs, cited its sources, and didn't hallucinate. The plan was simple. (See above.)
+
+> Ice Bear builds chatbot. Chatbot answers questions. Customers happy. How hard could it be?
+> <cite>— Me, looking at my reflection on day one, ignoring all warnings</cite>
+
+<h2 id="stack">The stack (boring on purpose)</h2>
+
+Boring is a feature. Every interesting decision in a RAG system is downstream of three boring ones: where do the documents live, where do the embeddings live, and what model do you call. Get those wrong and no amount of cleverness saves you.
+
+I picked Postgres for everything. Documents as JSONB. Embeddings as pgvector. Caches as plain rows. One backup story, one migration story, one set of credentials. The whole point of Postgres-for-everything is the boring point: when something is on fire at midnight, you only have to remember one thing.
+
+```sql
+-- the entire schema in one place
+CREATE TABLE documents (id UUID PRIMARY KEY, title TEXT, body TEXT);
+CREATE TABLE chunks (id UUID, document_id UUID, content TEXT, embedding vector(1536));
+CREATE INDEX ON chunks USING hnsw (embedding vector_cosine_ops);
+```
+
+That's the entire schema. Three tables, one index, one engine. People will tell you that you need a dedicated vector database. People are sometimes wrong.
+
+<h2 id="chunking">Chunking is the whole game</h2>
+
+The unsexy truth about RAG is that retrieval quality lives or dies on how you split the documents. Embeddings only know what you put in front of them. If a concept straddles a chunk boundary, the model can't see it, and you can't retrieve what isn't there.
+
+I tried four chunking strategies in two weeks:
+
+- **Paragraph splits.** Fast to build. Falls apart on the second hard query.
+- **Fixed token windows.** Loses concepts that cross boundaries.
+- **Overlapping windows.** The right answer, with a wrinkle.
+- **Recursive / semantic splits.** Best results, most complex. Save for v2.
+
+Overlapping windows won the bake-off. 512 tokens with a 64-token stride. The wrinkle: you end up retrieving multiple chunks from the same paragraph, which inflates your top-k and confuses your reranker. The fix is to dedupe by source-document on retrieval. Cheap, effective, and not in any tutorial I could find.
+
+<Callout title="Cold tip" icon="🧊">
+  Keep your chunks human-readable. If a chunk looks like nonsense to you, it looks like nonsense to the model. Open a random hundred chunks and read them. You will find at least three problems you didn't know you had.
+</Callout>
+
+<h2 id="reranker">The reranker pulls its weight</h2>
+
+For the first week I skipped the reranker. The cosine-similarity top-k was good enough, I told myself. It wasn't. Roughly one in five queries surfaced a chunk that was textually similar but semantically wrong, and the model would happily build a paragraph of confident nonsense around it.
+
+Adding a lightweight reranker — pull top-20 from the vector store, rerank, keep top-5 — dropped the bad-context rate by an order of magnitude. The reranker is fifty milliseconds. The hallucinations it prevents would have taken me weeks to find in customer feedback.
+
+### What I'd tell past-me
+
+Build the reranker on day one, even a cheap one. The whole RAG pipeline is a stack of decisions about what context the model sees. Rerankers are where you correct your earlier mistakes for free.
+
+<h2 id="citations">Citations or it didn't happen</h2>
+
+Every answer cites its sources. Every. Single. Answer. The model is told that responses without citations will be rejected and shown to the user as an apology. Anthropic, OpenAI, and Google all behave better when you give them an out — "say you don't know" is more powerful than "don't lie."
+
+The citations also unlock something we didn't expect: users started clicking through to the docs. The chatbot became a discovery layer for content people previously couldn't find. The support team noticed before I did.
+
+> Cite or apologize. There is no third option.
+
+<h2 id="cost">Cost, latency, and other lies</h2>
+
+The cheapest token is the one you don't send. We trimmed the system prompt three times, dropped two redundant retrieval fields from each chunk, and capped conversation history at the last six turns. Costs dropped 41% in a week. Quality didn't change. The model wasn't reading half of what we were sending it anyway.
+
+Latency budget: from keystroke to first token, sub-800ms. We hit 720ms p50 in production after three rounds of caching — embedding cache by query SHA, result cache by the same, and a small in-memory LRU for the top-100 most common phrasings. Most chatbots get asked the same six questions a thousand different ways.
+
+<h2 id="lessons">Six lessons, taped to the fridge</h2>
+
+- **Boring stack, interesting product.** Postgres-for-everything is right more often than not.
+- **Read your chunks.** A hundred at random. Right now.
+- **Reranker on day one.** Don't make me say it again.
+- **Cite or apologize.** The third option is hallucination.
+- **The cheapest token is the one you don't send.** Trim, trim, trim.
+- **Cache aggressively.** Same question, same answer, no excuse.
+
+---
+
+That's where we are. Two months in, six lessons taped to the fridge, and a chatbot that closes 31% of support tickets without a human in the loop. If you're building one of these, the door is open — Ice Bear is at [neuralnitin@gmail.com](mailto:neuralnitin@gmail.com).

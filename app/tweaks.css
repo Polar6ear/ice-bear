@@ -1,0 +1,235 @@
+/* Tweaks panel — floating control surface for theming, fonts, and snow.
+   Inspired by the design-tool prototype but self-contained for production. */
+
+.twk-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 60;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--snow);
+  color: var(--ink);
+  border: var(--outline);
+  box-shadow: var(--shadow);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.1s ease;
+}
+.twk-fab:hover {
+  transform: translateY(-2px) rotate(15deg);
+}
+
+.twk-panel {
+  position: fixed;
+  right: 18px;
+  bottom: 80px;
+  z-index: 61;
+  width: 300px;
+  max-height: calc(100vh - 120px);
+  background: rgba(250, 249, 247, 0.92);
+  color: var(--ink);
+  border: var(--outline);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  backdrop-filter: blur(20px) saturate(160%);
+  font-family: var(--font-body);
+}
+
+.twk-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 2px solid rgba(27, 58, 82, 0.1);
+  background: rgba(255, 255, 255, 0.4);
+}
+.twk-hd strong {
+  font-family: var(--font-display);
+  letter-spacing: var(--display-tracking);
+  font-size: 16px;
+}
+.twk-x {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ink-2);
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.twk-x:hover {
+  background: rgba(27, 58, 82, 0.08);
+  color: var(--ink);
+}
+
+.twk-body {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.twk-sect {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+
+.twk-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.twk-row-h {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+.twk-lbl {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.twk-lbl em {
+  font-style: normal;
+  color: var(--coral-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.twk-field {
+  appearance: none;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px solid rgba(27, 58, 82, 0.2);
+  background: var(--snow);
+  font: inherit;
+  color: var(--ink);
+  font-size: 13px;
+}
+.twk-field:focus {
+  outline: 2px solid var(--coral);
+  outline-offset: 1px;
+}
+
+.twk-seg {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(27, 58, 82, 0.08);
+  border-radius: 10px;
+}
+.twk-seg-btn {
+  appearance: none;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 6px 8px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  text-transform: capitalize;
+}
+.twk-seg-btn.active {
+  background: var(--snow);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.twk-toggle {
+  appearance: none;
+  position: relative;
+  width: 38px;
+  height: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(27, 58, 82, 0.18);
+  transition: background 0.15s;
+  cursor: pointer;
+  padding: 0;
+}
+.twk-toggle[data-on="1"] {
+  background: #1f8a5b;
+}
+.twk-toggle i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--snow);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s;
+}
+.twk-toggle[data-on="1"] i {
+  transform: translateX(16px);
+}
+
+.twk-slider {
+  appearance: none;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(27, 58, 82, 0.16);
+  outline: none;
+}
+.twk-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--coral);
+  border: 2px solid var(--snow);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+.twk-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--coral);
+  border: 2px solid var(--snow);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+}
+
+.twk-reset {
+  margin-top: 8px;
+  appearance: none;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(27, 58, 82, 0.2);
+  background: var(--snow);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.twk-reset:hover {
+  border-color: var(--coral);
+  color: var(--coral-2);
+}
